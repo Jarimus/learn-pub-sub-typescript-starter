@@ -4,14 +4,17 @@
   "scripts": {
     "server": "npx tsx src/server/index.ts",
     "client": "npx tsx src/client/index.ts",
-    "build": "tsc"
+    "build": "tsc",
+    "rabbit:start": "sh ./src/scripts/rabbit.sh start",
+    "rabbit:stop": "sh ./src/scripts/rabbit.sh stop",
+    "rabbit:logs": "sh ./src/scripts/rabbit.sh logs"
   },
   "dependencies": {
-    "amqplib": "^0.10.8"
+    "amqplib": "^0.10.9"
   },
   "devDependencies": {
     "@types/amqplib": "^0.10.7",
-    "@types/node": "^20.0.0",
+    "@types/node": "^20.19.21",
     "tsx": "^3.7.0",
     "typescript": "^4.4.0"
   }

@@ -6,18 +6,21 @@ import {
   printClientHelp,
   printQuit,
 } from "../internal/gamelogic/gamelogic.js";
-import { declareAndBind, SimpleQueueType } from "../internal/pubsub/publish.js";
-import { ExchangePerilDirect, PauseKey } from "../internal/routing/routing.js";
+import { declareAndBind, publishJSON, SimpleQueueType } from "../internal/pubsub/publish.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
 import { subscribeJSON } from "../internal/pubsub/subscribe.js";
-import { handlerPause } from "./handlers.js";
+import { handlerMove, handlerPause } from "./handlers.js";
 
 async function main() {
   const connectionString = "amqp://guest:guest@localhost:5672/";
   const conn = await amqp.connect(connectionString);
   console.log("Peril game client connected to RabbitMQ!");
+
+  // Open channel
+  const channel = await conn.createConfirmChannel();
 
   ["SIGINT", "SIGTERM"].forEach((signal) =>
     process.on(signal, async () => {
@@ -45,7 +48,7 @@ async function main() {
   // Create gamestate
   const gs = new GameState(username);
 
-  // Subscribe to a queue
+  // Subscribe to user's pause queue
   await subscribeJSON(
     conn,
     ExchangePerilDirect,
@@ -53,6 +56,16 @@ async function main() {
     PauseKey,
     SimpleQueueType.Transient,
     handlerPause(gs)
+  )
+
+  // Subscribe to army moves
+  await subscribeJSON(
+    conn,
+    ExchangePerilTopic,
+    `${ArmyMovesPrefix}.${username}`,
+    `${ArmyMovesPrefix}.*`,
+    SimpleQueueType.Transient,
+    handlerMove(gs)
   )
 
   while (true) {
@@ -63,7 +76,9 @@ async function main() {
     const command = words[0];
     if (command === "move") {
       try {
-        commandMove(gs, words);
+        const move = commandMove(gs, words);
+        publishJSON(channel, ExchangePerilTopic, `${ArmyMovesPrefix}.${username}`, move)
+        console.log('Move published successfully!')
       } catch (err) {
         console.log((err as Error).message);
       }

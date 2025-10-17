@@ -27,7 +27,18 @@ export async function subscribeJSON<T>(
       return
     }
     const content = JSON.parse(msg.content.toString())
-    handler(content)
-    channel.ack(msg)
+    const acktype = handler(content)
+    switch (acktype) {
+      case ackType.Ack:
+        channel.ack(msg)
+        break;
+      case ackType.NackDiscard:
+        channel.nack(msg, false, false)
+        break;
+      case ackType.NackRequeue:
+        channel.nack(msg, false, true)
+      default:
+        break;
+    }
   })
 }

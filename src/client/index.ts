@@ -7,12 +7,12 @@ import {
   printQuit,
 } from "../internal/gamelogic/gamelogic.js";
 import { declareAndBind, publishJSON, SimpleQueueType } from "../internal/pubsub/publish.js";
-import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey } from "../internal/routing/routing.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
 import { subscribeJSON } from "../internal/pubsub/subscribe.js";
-import { handlerMove, handlerPause } from "./handlers.js";
+import { handlerMove, handlerPause, handlerWar } from "./handlers.js";
 
 async function main() {
   const connectionString = "amqp://guest:guest@localhost:5672/";
@@ -65,7 +65,17 @@ async function main() {
     `${ArmyMovesPrefix}.${username}`,
     `${ArmyMovesPrefix}.*`,
     SimpleQueueType.Transient,
-    handlerMove(gs)
+    handlerMove(gs, channel)
+  )
+
+  // Subscribe to war resolutions
+  await subscribeJSON(
+    conn,
+    ExchangePerilTopic,
+    `${WarRecognitionsPrefix}`,
+    `${WarRecognitionsPrefix}.*`,
+    SimpleQueueType.Durable,
+    handlerWar(gs)
   )
 
   while (true) {

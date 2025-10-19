@@ -1,5 +1,6 @@
 import type { Channel, ConfirmChannel } from "amqplib";
 import amqp from 'amqplib'
+import msgPack from '@msgpack/msgpack'
 
 export enum SimpleQueueType {
   Durable,
@@ -13,25 +14,44 @@ export async function publishJSON<T>(
   value: T,
 ): Promise<void> {
   const valueString = JSON.stringify(value)
-  ch.publish(exchange, routingKey, Buffer.from(valueString), { contentType: 'application/json'})
+  return new Promise((resolve, reject) => {
+    ch.publish(
+      exchange,
+      routingKey,
+      Buffer.from(valueString),
+      { contentType: "application/json" },
+      (err) => {
+        if (err !== null) {
+          reject(new Error("Message was NACKed by the broker"));
+        } else {
+          resolve();
+        }
+      },
+    );
+  });
 }
 
-export async function declareAndBind(
-  conn: amqp.ChannelModel,
+export async function publishMsgPack<T>(
+  ch: ConfirmChannel,
   exchange: string,
-  queueName: string,
-  key: string,
-  queueType: SimpleQueueType,
-): Promise<[Channel, amqp.Replies.AssertQueue]> {
-
-  const channel = await conn.createConfirmChannel()
-  const queue = await channel.assertQueue(
-    queueName, {
-      durable: queueType === SimpleQueueType.Durable,
-      autoDelete: queueType !== SimpleQueueType.Durable,
-      exclusive: queueType !== SimpleQueueType.Durable,
-      arguments: { "x-dead-letter-exchange": "peril_dlx" }
-  })
-  await channel.bindQueue(queueName, exchange, key)
-  return [channel, queue]
+  routingKey: string,
+  value: T,
+): Promise<void> {
+  const body = msgPack.encode(value)
+  return new Promise((resolve, reject) => {
+    ch.publish(
+      exchange,
+      routingKey,
+      Buffer.from(body),
+      { contentType: "application/x-msgpack" },
+      (err) => {
+        if (err !== null) {
+          reject(new Error("Message was NACKed by the broker"));
+        } else {
+          resolve();
+        }
+      },
+    );
+  });
 }
+

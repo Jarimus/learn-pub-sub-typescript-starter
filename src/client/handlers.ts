@@ -5,10 +5,11 @@ import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import { handleMove, MoveOutcome } from "../internal/gamelogic/move.js";
 import { handlePause } from "../internal/gamelogic/pause.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
-import { ackType } from "../internal/pubsub/subscribe.js";
+import { ackType } from "../internal/pubsub/consume.js";
 import amqp from 'amqplib'
 import { ExchangePerilTopic, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { handleWar, WarOutcome } from "../internal/gamelogic/war.js";
+import { publishGameLog } from "./index.js";
 
 export function handlerPause(gs: GameState): (ps: PlayingState) => ackType {
   return (ps: PlayingState) => {
@@ -52,7 +53,7 @@ export function handlerMove(gs: GameState, ch: amqp.ConfirmChannel): (move: Army
   }
 }
 
-export function handlerWar(gs: GameState): (rw: RecognitionOfWar) => ackType {
+export function handlerWar(gs: GameState, ch: amqp.ConfirmChannel): (rw: RecognitionOfWar) => ackType {
   return (rw: RecognitionOfWar) => {
     console.log(rw)
     try {
@@ -68,10 +69,19 @@ export function handlerWar(gs: GameState): (rw: RecognitionOfWar) => ackType {
         
         case WarOutcome.OpponentWon:
         case WarOutcome.YouWon:
+          try {
+            publishGameLog(ch, gs.getPlayerSnap().username, `${resolution.winner} won a war against ${resolution.loser}`)
+            return ackType.Ack
+          } catch {
+            return ackType.NackRequeue
+          }
         case WarOutcome.Draw:
-          console.log('acked')
-          return ackType.Ack
-      
+          try {
+            publishGameLog(ch, gs.getPlayerSnap().username, `A war between ${resolution.attacker} and ${resolution.defender} resulted in a draw`)
+            return ackType.Ack
+          } catch {
+            return ackType.NackRequeue
+          }
         default:
           console.error('error handing war outcome')
           return ackType.NackDiscard

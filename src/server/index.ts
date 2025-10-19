@@ -1,7 +1,9 @@
 import amqp from 'amqplib'
-import { declareAndBind, publishJSON, SimpleQueueType } from '../internal/pubsub/publish.js';
+import { publishJSON, SimpleQueueType } from '../internal/pubsub/publish.js';
 import { ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey } from '../internal/routing/routing.js';
 import { getInput, printServerHelp } from '../internal/gamelogic/gamelogic.js';
+import { subscribeMsgPack } from '../internal/pubsub/consume.js';
+import { handlerLog } from './handlers.js';
 
 async function main() {
   const connectionString: string = "amqp://guest:guest@localhost:5672/"
@@ -27,13 +29,14 @@ async function main() {
   // Confirm channel
   const confirmChannel = await conn.createConfirmChannel()
 
-  // Bind and declare a queue to peril_topic exchange
-  const [ topicChannel, topicQueue ] = await declareAndBind(
+  // Subscribe to game logs
+  await subscribeMsgPack(
     conn,
     ExchangePerilTopic,
     GameLogSlug,
     `${GameLogSlug}.*`,
-    SimpleQueueType.Durable
+    SimpleQueueType.Durable,
+    handlerLog()
   )
 
   // Display server help

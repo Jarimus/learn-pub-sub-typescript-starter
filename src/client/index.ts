@@ -6,13 +6,14 @@ import {
   printClientHelp,
   printQuit,
 } from "../internal/gamelogic/gamelogic.js";
-import { declareAndBind, publishJSON, SimpleQueueType } from "../internal/pubsub/publish.js";
-import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
+import { publishJSON, publishMsgPack, SimpleQueueType } from "../internal/pubsub/publish.js";
+import { ArmyMovesPrefix, ExchangePerilDirect, ExchangePerilTopic, GameLogSlug, PauseKey, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { GameState } from "../internal/gamelogic/gamestate.js";
 import { commandSpawn } from "../internal/gamelogic/spawn.js";
 import { commandMove } from "../internal/gamelogic/move.js";
-import { subscribeJSON } from "../internal/pubsub/subscribe.js";
+import { declareAndBind, subscribeJSON } from "../internal/pubsub/consume.js";
 import { handlerMove, handlerPause, handlerWar } from "./handlers.js";
+import type { GameLog } from "../internal/gamelogic/logs.js";
 
 async function main() {
   const connectionString = "amqp://guest:guest@localhost:5672/";
@@ -75,7 +76,7 @@ async function main() {
     `${WarRecognitionsPrefix}`,
     `${WarRecognitionsPrefix}.*`,
     SimpleQueueType.Durable,
-    handlerWar(gs)
+    handlerWar(gs, channel)
   )
 
   while (true) {
@@ -112,6 +113,20 @@ async function main() {
       continue;
     }
   }
+}
+
+export function publishGameLog(ch: amqp.ConfirmChannel, username: string, message: string) {
+  const gameLog: GameLog = {
+    currentTime: new Date(),
+    message: message,
+    username: username
+  }
+  publishMsgPack(
+    ch,
+    ExchangePerilTopic,
+    `${GameLogSlug}.${username}`,
+    gameLog
+  )
 }
 
 main().catch((err) => {

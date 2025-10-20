@@ -3,6 +3,7 @@ import {
   clientWelcome,
   commandStatus,
   getInput,
+  getMaliciousLog,
   printClientHelp,
   printQuit,
 } from "../internal/gamelogic/gamelogic.js";
@@ -107,7 +108,30 @@ async function main() {
       printQuit();
       process.exit(0);
     } else if (command === "spam") {
-      console.log("Spamming not allowed yet!");
+      if (words.length < 2) {
+        console.log('Not enough arguments: spam <number>')
+        continue
+      }
+      if (words.length > 2) {
+        console.log('Too many arguments: spam <number>')
+        continue
+      }
+      let n: number
+      n = Number(words[1])
+      if (Number.isNaN(n) ) {
+        console.log('Provide a valid number for spam')
+        continue
+      }
+      for (let i=0; i < n; i++) {
+        const username = gs.getPlayerSnap().username
+        const msg = getMaliciousLog()
+        const log: GameLog = {
+          currentTime: new Date(),
+          message: msg,
+          username: username
+        }
+        await publishMsgPack(channel, ExchangePerilTopic, `${GameLogSlug}.${username}`, log)
+      }
     } else {
       console.log("Unknown command");
       continue;

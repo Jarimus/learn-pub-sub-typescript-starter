@@ -5,28 +5,28 @@ import type { PlayingState } from "../internal/gamelogic/gamestate.js";
 import { handleMove, MoveOutcome } from "../internal/gamelogic/move.js";
 import { handlePause } from "../internal/gamelogic/pause.js";
 import { publishJSON } from "../internal/pubsub/publish.js";
-import { ackType } from "../internal/pubsub/consume.js";
+import { AckType } from "../internal/pubsub/consume.js";
 import amqp from 'amqplib'
 import { ExchangePerilTopic, WarRecognitionsPrefix } from "../internal/routing/routing.js";
 import { handleWar, WarOutcome } from "../internal/gamelogic/war.js";
 import { publishGameLog } from "./index.js";
 
-export function handlerPause(gs: GameState): (ps: PlayingState) => ackType {
+export function handlerPause(gs: GameState): (ps: PlayingState) => AckType {
   return (ps: PlayingState) => {
     handlePause(gs, ps)
     getInput()
     console.log('acked')
-    return ackType.Ack
+    return AckType.Ack
   }
 }
 
-export function handlerMove(gs: GameState, ch: amqp.ConfirmChannel): (move: ArmyMove) => ackType {
+export function handlerMove(gs: GameState, ch: amqp.ConfirmChannel): (move: ArmyMove) => AckType {
   return (move: ArmyMove) => {
     const outcome = handleMove(gs, move)
     switch (outcome) {
       case MoveOutcome.Safe:
         console.log('acked')
-        return ackType.Ack
+        return AckType.Ack
 
       case MoveOutcome.MakeWar:
         const recognition: RecognitionOfWar = {
@@ -36,24 +36,24 @@ export function handlerMove(gs: GameState, ch: amqp.ConfirmChannel): (move: Army
         try {
           publishJSON(ch, ExchangePerilTopic, `${WarRecognitionsPrefix}.${gs.getPlayerSnap().username}`, recognition)
           console.log('acked')
-          return ackType.Ack
+          return AckType.Ack
         } catch {
           console.log('nackRequeued')
-          return ackType.NackRequeue
+          return AckType.NackRequeue
         }
 
       case MoveOutcome.SamePlayer:
         console.log('nackdiscarded')
-        return ackType.NackDiscard
+        return AckType.NackDiscard
 
       default:
         console.log('nackdiscarded')
-        return ackType.NackDiscard
+        return AckType.NackDiscard
     }
   }
 }
 
-export function handlerWar(gs: GameState, ch: amqp.ConfirmChannel): (rw: RecognitionOfWar) => ackType {
+export function handlerWar(gs: GameState, ch: amqp.ConfirmChannel): (rw: RecognitionOfWar) => AckType {
   return (rw: RecognitionOfWar) => {
     console.log(rw)
     try {
@@ -61,30 +61,30 @@ export function handlerWar(gs: GameState, ch: amqp.ConfirmChannel): (rw: Recogni
       switch (resolution.result) {
         case WarOutcome.NotInvolved:
           console.log('nackRequeued')
-          return ackType.NackRequeue
+          return AckType.NackRequeue
   
         case WarOutcome.NoUnits:
           console.log('nackDiscarded')
-          return ackType.NackDiscard
+          return AckType.NackDiscard
         
         case WarOutcome.OpponentWon:
         case WarOutcome.YouWon:
           try {
             publishGameLog(ch, gs.getPlayerSnap().username, `${resolution.winner} won a war against ${resolution.loser}`)
-            return ackType.Ack
+            return AckType.Ack
           } catch {
-            return ackType.NackRequeue
+            return AckType.NackRequeue
           }
         case WarOutcome.Draw:
           try {
             publishGameLog(ch, gs.getPlayerSnap().username, `A war between ${resolution.attacker} and ${resolution.defender} resulted in a draw`)
-            return ackType.Ack
+            return AckType.Ack
           } catch {
-            return ackType.NackRequeue
+            return AckType.NackRequeue
           }
         default:
           console.error('error handing war outcome')
-          return ackType.NackDiscard
+          return AckType.NackDiscard
       }
     } finally {
       process.stdout.write("> ");

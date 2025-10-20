@@ -39,6 +39,12 @@ async function main() {
     handlerLog()
   )
 
+  // Detect non-interactive mode (multi server mode)
+  if (!process.stdin.isTTY) {
+    console.log("Non-interactive mode: skipping command input.");
+    return;
+  }
+
   // Display server help
   printServerHelp()
 
